@@ -84,7 +84,17 @@ def AvgPostCount(catalog_list):
 	count_sum = reduce(lambda x, y: x + y, count_list)
 	return count_sum / len(count_list)
 
-								
+#def GetSagedPosts(catalog_list):
+#	current_catalog = catalog_list[0]['d']
+#	cat_last_modified = catalog_list[0]['mod']
+#	catalog_positiion = 0
+#	for t in current_catalog:
+#		if t['replies'] > 0:
+#			last_mod = t['last_replies'][-1]['time']
+#		else:
+#			last_mod = t['time']
+#TODO: store the catalogs in an efficiant way for comparing threads and think of a way to compare everything
+			
 def main():
 	catalog_list = Deque()
 	
