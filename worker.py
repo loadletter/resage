@@ -94,7 +94,11 @@ def AvgPostCount(catalog_list):
 #		else:
 #			last_mod = t['time']
 #TODO: store the catalogs in an efficiant way for comparing threads and think of a way to compare everything
-			
+#- 1)create a list of tuples like (index, last_mod)
+#  2)sort the list by last_mod
+#  3)iterate over the list and chech that index is in the same order
+#  4)if not in the same order (compare index in the tuple with current index or a simple >) check if previous posts in that thread are saged too
+
 def main():
 	catalog_list = Deque()
 	
