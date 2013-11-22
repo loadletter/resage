@@ -85,9 +85,9 @@ def AvgPostCount(catalog_list):
 	count_sum = reduce(lambda x, y: x + y, count_list)
 	return count_sum / len(count_list)
 
-def GetSagedPosts(catalog_list):
-	current_catalog = catalog_list[0]['d']
-	cat_last_modified = catalog_list[0]['mod']
+def GetSagedPosts(catalog_list, page=0):
+	current_catalog = catalog_list[page]['d']
+	cat_last_modified = catalog_list[page]['mod']
 	modtime_list = []
 	for cat_index, t in enumerate(current_catalog):
 		if t['replies'] > 0:
@@ -109,6 +109,7 @@ def GetSagedPosts(catalog_list):
 		preth = modtime_list[lst_i - 1]
 		if curth[0] > preth[0] and curth[2] < BUMPLIMIT and curth[1] != preth[1]:
 			print repr(curth), "%i - %i" % (lst_i, lst_i-1), repr(preth)
+			#TODO: code below is mostly useless
 			if curth[2] > 0:
 				for prev_reply in current_catalog[curth[0]]['last_replies']:
 					if prev_reply['time'] > preth[1]:
@@ -126,11 +127,16 @@ def GetSagedPosts(catalog_list):
 def main():
 	catalog_list = Deque()
 	
+	saged_threads = []
 	for i in range(0, 10):
 		UpdateCatalog(catalog_list)
-		print AvgPostCount(catalog_list)
+		#print AvgPostCount(catalog_list)
+		saged_threads.extend(GetSagedPosts(catalog_list))
+		print set(saged_threads)
 		time.sleep(5)
 	
+	print AvgPostCount(catalog_list)
+	print set(saged_threads)
 	
 	#try:
 		#while True:
