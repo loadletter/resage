@@ -42,7 +42,7 @@ def Checkb4Download(url,lastmod=''):
 		return {'lastmodified' : lastmodified, 'data' : data}
 	
 def UpdateCatalog(catalog_list):
-	for i in range(0, 3):
+	while True:
 		if len(catalog_list) > 1:
 			raw_data = Checkb4Download(CATALOG_URL, time_unix2http(catalog_list[0]['mod']))
 		else:
@@ -102,19 +102,26 @@ def GetSagedPosts(catalog_list):
 	
 	print "--------------"
 	for xd in modtime_list: print repr(xd)
-
+	
+	sagedlist = [] #list of (threadno, postno)
 	for lst_i in range(1, len(modtime_list)):
-		if modtime_list[lst_i][0] > modtime_list[lst_i - 1][0] and modtime_list[lst_i][2] < BUMPLIMIT and modtime_list[lst_i][1] != modtime_list[lst_i - 1][1]:
-			print repr(modtime_list[lst_i]), "%i - %i" % (lst_i, lst_i-1), repr(modtime_list[lst_i-1])
-		
-		
+		curth = modtime_list[lst_i]
+		preth = modtime_list[lst_i - 1]
+		if curth[0] > preth[0] and curth[2] < BUMPLIMIT and curth[1] != preth[1]:
+			print repr(curth), "%i - %i" % (lst_i, lst_i-1), repr(preth)
+			if curth[2] > 0:
+				for prev_reply in current_catalog[curth[0]]['last_replies']:
+					if prev_reply['time'] > preth[1]:
+						print prev_reply['resto'], "-->", prev_reply['no'], "t", prev_reply['time']
+						sagedlist.append((prev_reply['resto'], prev_reply['no']))
 	
-	
-#TODO: store the catalogs in an efficiant way for comparing threads and think of a way to compare everything
+	return sagedlist
+		
 #- 1)create a list of tuples like (index, last_mod, replies)
 #  2)sort the list by last_mod
 #  3)iterate over the list and chech that index is in the same order
-#  4)if not in the same order and not over the bump limit and times aren't the same check if previous posts in that thread are saged too
+#  4)if not in the same order and not over the bump limit and times aren't the same then check if previous posts in that thread are saged too
+#-TODO: this works only if the last post is saged, find a way to compare all of those posts, maybe use the older catalogs in memory
 
 def main():
 	catalog_list = Deque()
