@@ -3,6 +3,7 @@ from threading import Thread
 from collections import deque as Deque
 
 BOARD = "a"
+BUMPLIMIT = 500 #300 for jp
 CATALOG_URL = "http://api.4chan.org/" + BOARD + "/catalog.json"
 LOGLEVEL = logging.DEBUG
 LOGFILE = ''
@@ -84,20 +85,36 @@ def AvgPostCount(catalog_list):
 	count_sum = reduce(lambda x, y: x + y, count_list)
 	return count_sum / len(count_list)
 
-#def GetSagedPosts(catalog_list):
-#	current_catalog = catalog_list[0]['d']
-#	cat_last_modified = catalog_list[0]['mod']
-#	catalog_positiion = 0
-#	for t in current_catalog:
-#		if t['replies'] > 0:
-#			last_mod = t['last_replies'][-1]['time']
-#		else:
-#			last_mod = t['time']
+def GetSagedPosts(catalog_list):
+	current_catalog = catalog_list[0]['d']
+	cat_last_modified = catalog_list[0]['mod']
+	modtime_list = []
+	for cat_index, t in enumerate(current_catalog):
+		if t['replies'] > 0:
+			last_mod = t['last_replies'][-1]['time']
+		else:
+			last_mod = t['time']
+		modtime_list.append((cat_index, last_mod, t['replies']))
+	
+	for xd in modtime_list: print repr(xd)
+	
+	modtime_list.sort(key=lambda x: x[1])
+	
+	print "--------------"
+	for xd in modtime_list: print repr(xd)
+
+	for lst_i in range(1, len(modtime_list)):
+		if modtime_list[lst_i][0] > modtime_list[lst_i - 1][0] and modtime_list[lst_i][2] < BUMPLIMIT and modtime_list[lst_i][1] != modtime_list[lst_i - 1][1]:
+			print repr(modtime_list[lst_i]), "%i - %i" % (lst_i, lst_i-1), repr(modtime_list[lst_i-1])
+		
+		
+	
+	
 #TODO: store the catalogs in an efficiant way for comparing threads and think of a way to compare everything
-#- 1)create a list of tuples like (index, last_mod)
+#- 1)create a list of tuples like (index, last_mod, replies)
 #  2)sort the list by last_mod
 #  3)iterate over the list and chech that index is in the same order
-#  4)if not in the same order (compare index in the tuple with current index or a simple >) check if previous posts in that thread are saged too
+#  4)if not in the same order and not over the bump limit and times aren't the same check if previous posts in that thread are saged too
 
 def main():
 	catalog_list = Deque()
