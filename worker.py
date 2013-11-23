@@ -1,5 +1,4 @@
-import urllib2, json, logging, time, calendar, psycopg2, sys
-from threading import Thread
+import urllib2, json, logging, time, calendar, psycopg2, sys, signal
 from collections import deque as Deque
 from dbconf import *
 
@@ -11,7 +10,8 @@ DBMAXENTRIES = 3000
 CATALOG_URL = "http://api.4chan.org/" + BOARD + "/catalog.json"
 LOGLEVEL = logging.DEBUG
 LOGFILE = ''
-USERAGENT = "Mozilla/5.0 (X11; Linux i686; rv:18.0) Gecko/20100101 Firefox/18.0"
+USERAGENT = "Mozilla/5.0 (sagebot)"
+APPRUNNING = True
 
 DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist, lastmod) AS (
   values 
@@ -60,7 +60,7 @@ def Checkb4Download(url,lastmod=''):
 			logging.debug("CKDL - Not modified: %s",url)											
 			return {'lastmodified' : lastmod, 'data' : ''}	#not modified
 		elif e.code == 404:
-			logging.info("CKDL - 404 Error: %s",url)
+			logging.error("CKDL - 404 Error: %s",url)
 			return {'lastmodified' : lastmod, 'data' : '', 'error' : 404}
 		else:
 			logging.error("CKDL - %i %s: %s", e.code, e.msg, url)
@@ -124,33 +124,42 @@ def GetSagedPosts(catalog_list, page=0):
 			last_mod = t['time']
 		modtime_list.append((cat_index, last_mod, t['replies']))
 	
-	for xd in modtime_list: print repr(xd)
+	#for xd in modtime_list: print repr(xd)
 	
 	modtime_list.sort(key=lambda x: x[1])
 	
-	print "--------------"
-	for xd in modtime_list: print repr(xd)
+	#print "--------------"
+	#for xd in modtime_list: print repr(xd)
 	
 	sagedlist = [] #list of (threadno, postno, last_modified)
 	for lst_i in range(1, len(modtime_list)):
 		curth = modtime_list[lst_i]
 		preth = modtime_list[lst_i - 1]
 		if curth[0] > preth[0] and curth[2] < BUMPLIMIT and curth[1] != preth[1]:
-			print repr(curth), "%i - %i" % (lst_i, lst_i-1), repr(preth)
+			logging.debug("%s %i - %i %s" % (repr(curth), lst_i, lst_i - 1, repr(preth)))
 			#TODO: code below is mostly useless
 			if curth[2] > 0:
 				for prev_reply in current_catalog[curth[0]]['last_replies']:
 					if prev_reply['time'] > preth[1]:
-						print prev_reply['resto'], "-->", prev_reply['no'], "t", prev_reply['time']
+						logging.debug("%i --> %i time %i" % (prev_reply['resto'], prev_reply['no'], prev_reply['time']))
 						sagedlist.append((prev_reply['resto'], prev_reply['no'], curth[1]))
 	
 	return sagedlist
-		
+
+#GetSagedPosts
 #- 1)create a list of tuples like (index, last_mod, replies)
 #  2)sort the list by last_mod
 #  3)iterate over the list and chech that index is in the same order
 #  4)if not in the same order and not over the bump limit and times aren't the same then check if previous posts in that thread are saged too
 #-TODO: this works only if the last post is saged, find a way to compare all of those posts, maybe use the older catalogs in memory
+
+
+def sig_handler(signum=None, frame=None):
+    logging.warning("Signal handler called with signal %i, shutting down", signum)
+    APPRUNNING = False
+    time.sleep(3)  #here check if process is done
+    logging.warning("Stopping")
+    sys.exit(0)
 
 def main():
 	try:
@@ -165,9 +174,12 @@ def main():
 	initcurs.close()
 	
 	catalog_list = Deque()
+		
+	for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]:
+		signal.signal(sig, sig_handler)
 	
-	saged_threads = []
-	for i in range(0, 10):
+	while APPRUNNING:
+		time.sleep(UPDATEINTERVAL)
 		UpdateCatalog(catalog_list)
 		#print AvgPostCount(catalog_list)
 		data = GetSagedPosts(catalog_list)
@@ -188,40 +200,12 @@ def main():
 		else:
 			conn.commit()
 		cur.close()
-		
-		saged_threads.extend(data)
-		print set(saged_threads)
-		time.sleep(UPDATEINTERVAL)
 	
-	print AvgPostCount(catalog_list)
-	print set(saged_threads)
+	logging.info("Avg Postcount: %i" % AvgPostCount(catalog_list))
 	conn.close()
-	
 	
 	#on the other program SELECT array_to_json(sagedlist) FROM test WHERE threadno = 8015616;
 	
-	#try:
-		#while True:
-			#CatalogThreadDaemon(op_list)
-			#catalog_list = []
-			#for thr in op_list:
-				#catalog_list.append(thr['no'])
-			
-			#dlthreads = []
-			#for n in range(0,4):
-				#DlThread = Thread(target=DownloadThreadDaemon, args=(op_list, thread_dict, dead_list))
-				#DlThread.daemon=True
-				#DlThread.start()
-				#dlthreads.append(DlThread)
-			#for dlthread in dlthreads:
-				#dlthread.join()
-
-			##DownloadThreadDaemon(op_list, thread_dict, dead_list)
-			#DBThreadDaemon(dead_list, thread_dict, op_list, catalog_list)
-			#sleep(UPDATE_DELAY)
-
-	#except (KeyboardInterrupt, SystemExit):
-		#logging.warn("Received keyboard interrupt! , terminating threads.")
 
 if __name__ == '__main__':
 	if LOGFILE == '':
