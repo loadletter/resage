@@ -1,13 +1,37 @@
-import urllib2, json, logging, time, calendar
+import urllib2, json, logging, time, calendar, psycopg2, sys
 from threading import Thread
 from collections import deque as Deque
+from dbconf import *
 
 BOARD = "a"
 BUMPLIMIT = 500 #300 for jp
+UPDATEINTERVAL = 5
+
 CATALOG_URL = "http://api.4chan.org/" + BOARD + "/catalog.json"
 LOGLEVEL = logging.DEBUG
 LOGFILE = ''
 USERAGENT = "Mozilla/5.0 (X11; Linux i686; rv:18.0) Gecko/20100101 Firefox/18.0"
+
+DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist) AS (
+  values 
+     (%s, %s)
+
+),
+upsert AS
+( 
+    update sage s
+        SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(s.sagedlist, nv.sagedlist)) ORDER BY 1)
+    FROM new_values nv
+    WHERE s.threadno = nv.threadno
+    RETURNING s.*
+)
+INSERT INTO sage (threadno, sagedlist)
+SELECT threadno, ARRAY[sagedlist]
+FROM new_values
+WHERE NOT EXISTS (SELECT 1 
+                  FROM upsert up
+                  WHERE up.threadno = new_values.threadno)
+"""
 
 def time_http2unix(http_time_string):
 	time_tuple = time.strptime(http_time_string, '%a, %d %b %Y %H:%M:%S GMT')
@@ -53,7 +77,7 @@ def UpdateCatalog(catalog_list):
 				logging.error("Couln't update catalog")
 			else:
 				logging.debug("Catalog not modified")
-			time.sleep(20)
+			time.sleep(UPDATEINTERVAL * 2)
 			continue
 		
 		catalog = json.loads(raw_data['data'])
@@ -125,18 +149,45 @@ def GetSagedPosts(catalog_list, page=0):
 #-TODO: this works only if the last post is saged, find a way to compare all of those posts, maybe use the older catalogs in memory
 
 def main():
+	try:
+		conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, host=DB_HOST, password=DB_PASS)
+	except:
+		logging.error("UNABLE TO CONNECT TO DATABASE, TERMINATING!")
+		sys.exit(1)
+	
+	initcurs = conn.cursor()
+	initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[])")
+	conn.commit()
+	initcurs.close()
+	
 	catalog_list = Deque()
 	
 	saged_threads = []
 	for i in range(0, 10):
 		UpdateCatalog(catalog_list)
 		#print AvgPostCount(catalog_list)
-		saged_threads.extend(GetSagedPosts(catalog_list))
+		data = GetSagedPosts(catalog_list)
+		cur = conn.cursor()
+		try:
+			cur.executemany(DB_EXEC_UPSERT, data)
+		except:
+			logging.error("ERROR EXECUTING UPSERT!")
+			conn.rollback()
+		else:
+			conn.commit()
+		cur.close()
+		
+		saged_threads.extend(data)
 		print set(saged_threads)
-		time.sleep(5)
+		time.sleep(UPDATEINTERVAL)
 	
 	print AvgPostCount(catalog_list)
 	print set(saged_threads)
+	conn.close()
+	
+	#UPDATE test SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(sagedlist, 148)) ORDER BY 1) WHERE threadno = 8015616;
+	
+	#on the other program SELECT array_to_json(sagedlist) FROM test WHERE threadno = 8015616;
 	
 	#try:
 		#while True:
