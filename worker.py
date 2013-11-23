@@ -203,9 +203,7 @@ def main():
 	
 	logging.info("Avg Postcount: %i" % AvgPostCount(catalog_list))
 	conn.close()
-	
-	#on the other program SELECT array_to_json(sagedlist) FROM test WHERE threadno = 8015616;
-	
+
 
 if __name__ == '__main__':
 	if LOGFILE == '':
