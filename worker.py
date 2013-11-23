@@ -155,11 +155,11 @@ def GetSagedPosts(catalog_list, page=0):
 
 
 def sig_handler(signum=None, frame=None):
-    logging.warning("Signal handler called with signal %i, shutting down", signum)
-    APPRUNNING = False
-    time.sleep(3)  #here check if process is done
-    logging.warning("Stopping")
-    sys.exit(0)
+	logging.warning("Signal handler called with signal %i, shutting down", signum)
+	APPRUNNING = False
+	time.sleep(3)
+	logging.warning("Stopping")
+	sys.exit(0)
 
 def main():
 	try:
