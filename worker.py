@@ -12,26 +12,29 @@ LOGLEVEL = logging.DEBUG
 LOGFILE = ''
 USERAGENT = "Mozilla/5.0 (X11; Linux i686; rv:18.0) Gecko/20100101 Firefox/18.0"
 
-DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist) AS (
+DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist, lastmod) AS (
   values 
-     (%s, %s)
+     (%s, %s, %s)
 
 ),
 upsert AS
 ( 
     update sage s
-        SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(s.sagedlist, nv.sagedlist)) ORDER BY 1)
+        SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(s.sagedlist, nv.sagedlist)) ORDER BY 1),
+            lastmod = nv.lastmod
     FROM new_values nv
     WHERE s.threadno = nv.threadno
     RETURNING s.*
 )
-INSERT INTO sage (threadno, sagedlist)
-SELECT threadno, ARRAY[sagedlist]
+INSERT INTO sage (threadno, sagedlist, lastmod)
+SELECT threadno, ARRAY[sagedlist], lastmod
 FROM new_values
 WHERE NOT EXISTS (SELECT 1 
                   FROM upsert up
                   WHERE up.threadno = new_values.threadno)
 """
+#UPDATE test SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(sagedlist, 148)) ORDER BY 1) WHERE threadno = 8015616;
+#adds a number to the postgre array, removing duplicates
 
 def time_http2unix(http_time_string):
 	time_tuple = time.strptime(http_time_string, '%a, %d %b %Y %H:%M:%S GMT')
@@ -127,7 +130,7 @@ def GetSagedPosts(catalog_list, page=0):
 	print "--------------"
 	for xd in modtime_list: print repr(xd)
 	
-	sagedlist = [] #list of (threadno, postno)
+	sagedlist = [] #list of (threadno, postno, last_modified)
 	for lst_i in range(1, len(modtime_list)):
 		curth = modtime_list[lst_i]
 		preth = modtime_list[lst_i - 1]
@@ -138,7 +141,7 @@ def GetSagedPosts(catalog_list, page=0):
 				for prev_reply in current_catalog[curth[0]]['last_replies']:
 					if prev_reply['time'] > preth[1]:
 						print prev_reply['resto'], "-->", prev_reply['no'], "t", prev_reply['time']
-						sagedlist.append((prev_reply['resto'], prev_reply['no']))
+						sagedlist.append((prev_reply['resto'], prev_reply['no'], curth[1]))
 	
 	return sagedlist
 		
@@ -156,7 +159,7 @@ def main():
 		sys.exit(1)
 	
 	initcurs = conn.cursor()
-	initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[])")
+	initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[], lastmod INTEGER)")
 	conn.commit()
 	initcurs.close()
 	
@@ -185,7 +188,6 @@ def main():
 	print set(saged_threads)
 	conn.close()
 	
-	#UPDATE test SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(sagedlist, 148)) ORDER BY 1) WHERE threadno = 8015616;
 	
 	#on the other program SELECT array_to_json(sagedlist) FROM test WHERE threadno = 8015616;
 	
