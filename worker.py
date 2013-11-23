@@ -6,6 +6,7 @@ from dbconf import *
 BOARD = "a"
 BUMPLIMIT = 500 #300 for jp
 UPDATEINTERVAL = 5
+DBMAXENTRIES = 3000
 
 CATALOG_URL = "http://api.4chan.org/" + BOARD + "/catalog.json"
 LOGLEVEL = logging.DEBUG
@@ -175,6 +176,14 @@ def main():
 			cur.executemany(DB_EXEC_UPSERT, data)
 		except:
 			logging.error("ERROR EXECUTING UPSERT!")
+			conn.rollback()
+		else:
+			conn.commit()
+
+		try:
+			cur.execute("DELETE FROM sage WHERE threadno IN (SELECT threadno FROM sage ORDER BY lastmod DESC OFFSET (%s))", (DBMAXENTRIES,))
+		except:
+			logging.error("ERROR EXECUTING DATABASE CLEANUP!")
 			conn.rollback()
 		else:
 			conn.commit()
