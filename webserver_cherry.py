@@ -35,9 +35,11 @@ class Api(object):
 			DBCONN.rollback()
 			cherrypy.response.status = 505
 			return
-	
+		
+		#TODO: the database might drop the connection after some time, raising InterfaceError: connection already closed at commit, handle it
 		data = cur.fetchone()
 		DBCONN.commit()
+		cur.close()
 		
 		if not data:
 			cherrypy.response.status = 404
