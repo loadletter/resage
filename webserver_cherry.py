@@ -1,14 +1,28 @@
 import cherrypy
-import os, sys, logging, signal, psycopg2, time
+import os, sys, logging, signal, time
+import psycopg2, psycopg2.pool
 from dbconf import *
 from worker import BOARD
-
+from contextlib import contextmanager
 
 try:
-	DBCONN = psycopg2.connect(dbname=DB_NAME, user=DB_USER, host=DB_HOST, password=DB_PASS)
+	DBCONN = psycopg2.pool.ThreadedConnectionPool(1, 8, dbname=DB_NAME, user=DB_USER, host=DB_HOST, password=DB_PASS)
 except:
 	cherrypy.log("UNABLE TO CONNECT TO DATABASE, TERMINATING!", context='DATABASE', severity=logging.ERROR, traceback=False)
 	sys.exit(1)
+
+
+@contextmanager
+def getcursor():
+	con = DBCONN.getconn()
+	try:
+		yield con.cursor()
+	except:
+		cherrypy.log("Error while running SELECT", context='DATABASE', severity=logging.ERROR, traceback=False)
+		con.rollback()
+	finally:
+		con.commit()
+		DBCONN.putconn(con)
 
 
 def time_unix2http(unix_time_int):
@@ -21,29 +35,28 @@ class Api(object):
 	def default(self, board, thread):
 		if not thread.isdigit():
 			cherrypy.response.status = 400
-			return
+			return ""
 		
 		if board != BOARD:
 			cherrypy.response.status = 404
-			return
+			return ""
 		
-		cur = DBCONN.cursor()
-		try:
-			cur.execute('SELECT array_to_json(sagedlist), lastmod FROM sage WHERE threadno = (%s) LIMIT 1', (thread, ))
-		except:
-			cherrypy.log("Error while running SELECT", context='DATABASE', severity=logging.ERROR, traceback=False)
-			DBCONN.rollback()
-			cherrypy.response.status = 505
-			return
-		
-		#TODO: the database might drop the connection after some time, raising InterfaceError: connection already closed at commit, handle it
-		data = cur.fetchone()
-		DBCONN.commit()
-		cur.close()
+		for i in range(0, 4):
+			try:
+				with getcursor() as cur:
+					cur.execute('SELECT array_to_json(sagedlist), lastmod FROM sage WHERE threadno = (%s) LIMIT 1', (thread, ))
+					data = cur.fetchone()
+			except psycopg2.InterfaceError:
+				if i == 3:
+					cherrypy.response.status = 500
+					return "Database connection error"
+				if not 'data' in locals():
+					continue
+			break
 		
 		if not data:
 			cherrypy.response.status = 404
-			return
+			return ""
 		
 		lastmod = time_unix2http(data[1])
 		if 'If-Modified-Since' in cherrypy.request.headers and cherrypy.request.headers['If-Modified-Since'] == lastmod:
