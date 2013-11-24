@@ -18,7 +18,7 @@ var supportedboards = ['a'];
 var board = spliturl[1];
 var thread = spliturl[2];
 var lastmodified = "";
-var sagelist = "";
+var sagelist = [];
 
 
 /*TODO:
@@ -54,7 +54,7 @@ function getdatafromAPI()
 				case 200:
                     console.log("Got data");
                     lastmodified = responseDetails.responseHeaders['Last-Modified'];
-                    sagelist = responseDetails.responseText;
+                    sagelist = JSON.parse(responseDetails.responseText);
                 break;
                 case 304:
                     console.log("Data not modified");
@@ -74,17 +74,22 @@ function getdatafromAPI()
 
 function HighlightIfSage(a)
 {
-    if (a.href.indexOf("mailto:") == 0) 
+    /*if (a.href.indexOf("mailto:") == 0) 
     {
         if (a.href.toLowerCase().indexOf("sage") != -1)
         {
             a.style.color = "red";
             a.style.fontStyle = "italic";
         }
+    }*/
+    if(arrinclude(sagelist, parseInt((a.id.slice(2)))))
+    {
+        /*a.getElementsByClassName("name")[0].style.color = "red";
+         * should be like this, but it doesn't work */
     }
 }
 
-Array.forEach(document.getElementsByTagName('A'), HighlightIfSage);
+Array.forEach(document.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
 
 /*
  * 4chan X's thread expansion and thread updater
@@ -94,7 +99,7 @@ function OnDOMNodeInserted(e)
 {
     if(e.target.nodeName == "DIV")
     {
-        Array.forEach(e.target.getElementsByTagName('A'), HighlightIfSage);
+        Array.forEach(e.target.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
     }
 }
 
