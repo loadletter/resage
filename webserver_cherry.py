@@ -64,9 +64,9 @@ class Api(object):
 			return
 		
 		cherrypy.response.headers['Content-Type'] = 'application/json'
-		cherrypy.response.headers["Last-Modified"] = lastmod
+		cherrypy.response.headers['Last-Modified'] = lastmod
 		
-		return data[0]
+		return str(data[0])
 
 
 class Root(object):
