@@ -78,8 +78,14 @@ class Root(object):
 	
 	
 def main():
-	cherrypy.config.update({'server.socket_host': '0.0.0.0',})
-	cherrypy.config.update({'server.socket_port': int(os.environ.get('PORT', '5000')),})
+	conf_path = os.path.dirname(os.path.abspath(__file__))
+	conf_path = os.path.join(conf_path, "webserver.conf")
+	if os.path.isfile(conf_path):
+		cherrypy.config.update(conf_path)
+	else:
+		cherrypy.log("Configuration file NOT Found: %s" % conf_path, context='CONFIG', severity=logging.WARNING, traceback=False)
+	cherrypy.config.update({'server.socket_host' : '0.0.0.0', })
+	cherrypy.config.update({'server.socket_port' : int(os.environ.get('PORT', '5000')), })
 	cherrypy.quickstart(Root())
 
 if __name__ == '__main__':
