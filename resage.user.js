@@ -38,7 +38,7 @@ function getdatafromAPI()
 			'Accept': 'application/json',
     };
     
-    var httperror = false;
+    var listmodified = false;
     
     if(lastmodified != "") {
         headers_tosend['If-Modified-Since'] = lastmodified;
@@ -55,16 +55,16 @@ function getdatafromAPI()
                     console.log("Got data");
                     lastmodified = responseDetails.responseHeaders['Last-Modified'];
                     sagelist = JSON.parse(responseDetails.responseText);
+                    listmodified = true;
                 break;
                 case 304:
                     console.log("Data not modified");
                 break;
                 default:
                     console.log("Error %i", responseDetails.status);
-                    httperror = true;
 			}
             
-            if(!httperror) {
+            if(listmodified) {
                 //execute somethings that executes runs the highlight code
             }
         
@@ -84,9 +84,10 @@ function HighlightIfSage(a)
     }*/
     if(arrinclude(sagelist, parseInt((a.id.slice(2)))))
     {
-        /*a.getElementsByClassName("name")[0].style.color = "red";
-         * should be like this, but it doesn't work */
+        a.getElementsByClassName("name")[0].style.color = "red";
+        a.getElementsByClassName("name")[0].fontStyle = "italic";
     }
+    /* this should  work */ 
 }
 
 Array.forEach(document.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
