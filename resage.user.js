@@ -13,26 +13,64 @@
 */
 
 var serverurl = "http://resage.herokuapp.com/";
+var spliturl = document.URL.split(/4chan.org\/([\d\w]{1,3})\/res\/([0-9]+)$/);
+var supportedboards = ['a'];
+var board = spliturl[1];
+var thread = spliturl[2];
+var lastmodified = "";
+var sagelist = "";
 
-/*function transmit(obj)
+
+/*TODO:
+ * eventlistener -->\
+ *                   |--> getdatafromAPI --> if arrainclude(supportedboards, board) --> highlight from sagelist
+ * pageload ------->/
+ * */
+ 
+function arrinclude(arr, obj) {
+    return (arr.indexOf(obj) != -1);
+}
+
+function getdatafromAPI()
 {
-	GM_xmlhttpRequest({
-		method: 'GET',
-		url: 'http://www.yoursite.org/datagatherer/',
-		headers: {
-			'User-agent': 'Mozilla/4.0 (compatible) Greasemonkey',
+    var headers_tosend = {
+			'User-agent': navigator.userAgent,
 			'Accept': 'application/json',
-			'Content-type': 'application/x-www-form-urlencoded'
-		},
-		data: 'json=' + JSON.stringify(obj),
-		onload: function(responseDetails) {
-			if(responseDetails.status == 200)
+    };
+    
+    var httperror = false;
+    
+    if(lastmodified != "") {
+        headers_tosend['If-Modified-Since'] = lastmodified;
+    }
+    
+    GM_xmlhttpRequest({
+        method: 'GET',
+        url: serverurl + '/' + board + '/' + thread,
+        headers: headers_tosend,
+        onload: function(responseDetails) {
+            switch(responseDetails.status)
 			{
-				alert("Got a good response!");
+				case 200:
+                    console.log("Got data");
+                    lastmodified = responseDetails.responseHeaders['Last-Modified'];
+                    sagelist = responseDetails.responseText;
+                break;
+                case 304:
+                    console.log("Data not modified");
+                break;
+                default:
+                    console.log("Error %i", responseDetails.status);
+                    httperror = true;
 			}
+            
+            if(!httperror) {
+                //execute somethings that executes runs the highlight code
+            }
+        
 		}
 	});
-}*/
+}
 
 function HighlightIfSage(a)
 {
