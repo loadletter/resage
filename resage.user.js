@@ -24,7 +24,7 @@ var sagelist = [];
 var cooldown = false;
 
 
-/*TODO:
+/*TODO: make this javascript garbage work
  * eventlistener -->\
  *                   |--> getdatafromAPI --> if arrainclude(supportedboards, board) --> highlight from sagelist
  * pageload ------->/
@@ -83,7 +83,7 @@ function HighlightIfSage(a)
     if(ArrInclude(sagelist, parseInt((a.id.slice(2)))))
     {
         a.getElementsByClassName("name")[0].style.color = "red";
-        a.getElementsByClassName("name")[0].fontStyle = "italic";
+        a.getElementsByClassName("name")[0].style.fontStyle = "italic";
     }
 }
 
@@ -93,7 +93,7 @@ function HighlightIfSage(a)
  
 function OnDOMNodeInserted(e)
 {
-    if(e.target.nodeName == "DIV" && cooldown)
+    if(e.target.nodeName == "DIV" && cooldown) //TODO:should be !cooldown
     {
         GetPostsFromAPI(e.target);
         console.log("running from onnodeinserted");
