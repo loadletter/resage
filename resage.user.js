@@ -12,7 +12,8 @@
 * Original script http://userscripts.org/scripts/review/36554
 */
 
-var serverurl = "http://resage.herokuapp.com/";
+var workernumber = 2; /* load balancing pro */
+var serverurl = "http://resage-" + Math.floor((Math.random() * workernumber) + 1) + ".herokuapp.com/";
 var spliturl = document.URL.split(/4chan.org\/([\d\w]{1,3})\/res\/([0-9]+)$/);
 var supportedboards = ['a'];
 var board = spliturl[1];

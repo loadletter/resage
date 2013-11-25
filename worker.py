@@ -7,7 +7,7 @@ BUMPLIMIT = 500 #300 for jp
 UPDATEINTERVAL = 5
 DBMAXENTRIES = 3000
 
-CATALOG_URL = "http://api.4chan.org/" + BOARD + "/catalog.json"
+CATALOG_URL = "http://a.4cdn.org/" + BOARD + "/catalog.json"
 LOGLEVEL = logging.DEBUG
 LOGFILE = ''
 USERAGENT = "Mozilla/5.0 (sagebot)"
