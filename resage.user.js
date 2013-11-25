@@ -2,8 +2,8 @@
 // @name           4chan - Highlight all sage posts v2
 // @namespace      resage (https://github.com/loadletter/resage)
 // @description    Finds saged posts and changes the email field from the default blue colour to red. This is useful as you can distinguish posts with sage. 
-// @include        http://*.4chan.org/*
-// @include        https://*.4chan.org/*
+// @include        http://*.4chan.org/*/res/*
+// @include        https://*.4chan.org/*/res/*
 // @grant          GM_xmlhttpRequest
 // @updateURL      https://github.com/loadletter/resage/raw/master/resage.user.js
 // ==/UserScript==
@@ -14,9 +14,9 @@
 */
 
 var workernumber = 2; /* load balancing pro */
-var serverurl = "http://resage-" + Math.floor((Math.random() * workernumber) + 1) + ".herokuapp.com/";
+var serverurl = "http://resage-" + Math.floor((Math.random() * workernumber) + 1) + ".herokuapp.com/api";
 var spliturl = document.URL.split(/4chan.org\/([\d\w]{1,3})\/res\/([0-9]+)$/);
-var supportedboards = ['a'];
+var supportedboards = ['a', 'jp'];
 var board = spliturl[1];
 var thread = spliturl[2];
 var lastmodified = "";
@@ -72,7 +72,7 @@ function GetPostsFromAPI(e)
             setTimeout(function() {cooldown = false;}, 3000);
             if(listmodified)
             {
-                Array.forEach(e.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
+                Array.forEach(e.getElementsByClassName("postInfo desktop"), HighlightIfSage);
             }
 		}
 	});
@@ -87,8 +87,6 @@ function HighlightIfSage(a)
     }
 }
 
-GetPostsFromAPI(document);
-
 /*
  * 4chan X's thread expansion and thread updater
  */
@@ -98,7 +96,12 @@ function OnDOMNodeInserted(e)
     if(e.target.nodeName == "DIV" && cooldown)
     {
         GetPostsFromAPI(e.target);
+        console.log("running from onnodeinserted");
     }
 }
 
-document.body.addEventListener("DOMNodeInserted", OnDOMNodeInserted, false);
+if(ArrInclude(supportedboards, board)) {
+    GetPostsFromAPI(document);
+    console.log("running from load");
+    document.body.addEventListener("DOMNodeInserted", OnDOMNodeInserted, false);
+}
