@@ -1,8 +1,8 @@
 import cherrypy
 import os, sys, logging, signal, time
 import psycopg2, psycopg2.pool
+from common import BOARDS, time_unix2http
 from dbconf import *
-from common import *
 from contextlib import contextmanager
 
 try:
@@ -23,11 +23,6 @@ def getcursor():
 	finally:
 		con.commit()
 		DBCONN.putconn(con)
-
-
-def time_unix2http(unix_time_int):
-	time_tuple = time.gmtime(unix_time_int)
-	return time.strftime('%a, %d %b %Y %H:%M:%S GMT', time_tuple)
 
 
 class Api(object):

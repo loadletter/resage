@@ -2,11 +2,10 @@ import urllib2, json, logging, time, calendar, sys, signal
 import psycopg2, psycopg2.pool
 from collections import deque as Deque
 from contextlib import contextmanager
+from common import BOARDS, time_http2unix, time_unix2http
 from dbconf import *
-from common import *
 
-#BOARDS = {"a" : (500, 10, 3000), "jp" : (300, 15, 3000)}
-#{board : (bumplimit, refresh_interval, db_maxentries)}
+#BOARDS = {board : (bumplimit, refresh_interval, db_maxentries)}
 
 CATALOG_URL = "http://a.4cdn.org/%s/catalog.json"
 LOGLEVEL = logging.DEBUG
@@ -42,7 +41,7 @@ def time_http2unix(http_time_string):
 	time_tuple = time.strptime(http_time_string, '%a, %d %b %Y %H:%M:%S GMT')
 	return calendar.timegm(time_tuple)
 
-def Checkb4Download(url,lastmod=''):
+def Checkb4Download(url, lastmod=''):
 	header = {'User-Agent': USERAGENT, }
 	req = urllib2.Request(url, None, header)
 	if lastmod != '':
@@ -128,7 +127,7 @@ def GetSagedPosts(catalog_lists, board):
 				for prev_reply in current_catalog[curth[0]]['last_replies']:
 					if prev_reply['time'] > preth[1]:
 						logging.debug("%i --> %i time %i" % (prev_reply['resto'], prev_reply['no'], prev_reply['time']))
-						sagedlist.append((prev_reply['resto'], prev_reply['no'], curth[1]))
+						sagedlist.append((prev_reply['resto'], prev_reply['no'], curth[1], board))
 	
 	return sagedlist
 
@@ -153,7 +152,7 @@ def getcursor(conn_pool, query_text):
 	try:
 		yield con.cursor()
 	except:
-		cherrypy.log("ERROR EXECUTING %s!" % query_text, context='DATABASE', severity=logging.ERROR, traceback=False)
+		logging.error("DATABASE ERROR EXECUTING %s!", query_text)
 		con.rollback()
 	finally:
 		con.commit()
@@ -187,7 +186,7 @@ def main():
 		for board in BOARDS.iterkeys():
 			if refresh_timer[board] < BOARDS[board][1]:
 				refresh_timer[board] += 5
-				break
+				continue
 
 			if not APPRUNNING:
 				break
@@ -195,11 +194,15 @@ def main():
 			newtime = UpdateCatalog(catalog_lists, board, -BOARDS[board][1])
 			data = GetSagedPosts(catalog_lists, board)
 			
+			logging.debug("Data processed for /%s/", board)
+			
 			with getcursor(conn, "UPSERT") as cur:
 				cur.executemany(DB_EXEC_UPSERT, data)
 			
 			with getcursor(conn, "DATABASE CLEANUP") as cur:
 				cur.execute("DELETE FROM sage WHERE threadno IN (SELECT threadno FROM sage WHERE board = (%s) ORDER BY lastmod DESC OFFSET (%s))", (board, BOARDS[board][2]))
+			
+			logging.debug("Data inserted in database for /%s/", board)
 			
 			refresh_timer[board] = newtime
 	
