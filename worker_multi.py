@@ -182,10 +182,10 @@ def main():
 	logging.warning("Worker starting...")
 	
 	while APPRUNNING:
-		time.sleep(5)
+		time.sleep(2)
 		for board in BOARDS.iterkeys():
 			if refresh_timer[board] < BOARDS[board][1]:
-				refresh_timer[board] += 5
+				refresh_timer[board] += 2
 				continue
 
 			if not APPRUNNING:
