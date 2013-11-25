@@ -28,11 +28,12 @@ var sagelist = [];
  * pageload ------->/
  * */
  
-function arrinclude(arr, obj) {
+function ArrInclude(arr, obj)
+{
     return (arr.indexOf(obj) != -1);
 }
 
-function getdatafromAPI()
+function GetPostsFromAPI(e)
 {
     var headers_tosend = {
 			'User-agent': navigator.userAgent,
@@ -41,7 +42,8 @@ function getdatafromAPI()
     
     var listmodified = false;
     
-    if(lastmodified != "") {
+    if(lastmodified != "")
+    {
         headers_tosend['If-Modified-Since'] = lastmodified;
     }
     
@@ -65,33 +67,24 @@ function getdatafromAPI()
                     console.log("Error %i", responseDetails.status);
 			}
             
-            if(listmodified) {
-                //execute somethings that executes runs the highlight code
+            if(listmodified)
+            {
+                Array.forEach(e.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
             }
-        
 		}
 	});
 }
 
 function HighlightIfSage(a)
 {
-    /*if (a.href.indexOf("mailto:") == 0) 
-    {
-        if (a.href.toLowerCase().indexOf("sage") != -1)
-        {
-            a.style.color = "red";
-            a.style.fontStyle = "italic";
-        }
-    }*/
-    if(arrinclude(sagelist, parseInt((a.id.slice(2)))))
+    if(ArrInclude(sagelist, parseInt((a.id.slice(2)))))
     {
         a.getElementsByClassName("name")[0].style.color = "red";
         a.getElementsByClassName("name")[0].fontStyle = "italic";
     }
-    /* this should  work */ 
 }
 
-Array.forEach(document.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
+GetPostsFromAPI(document);
 
 /*
  * 4chan X's thread expansion and thread updater
@@ -101,7 +94,7 @@ function OnDOMNodeInserted(e)
 {
     if(e.target.nodeName == "DIV")
     {
-        Array.forEach(e.target.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
+        GetPostsFromAPI(e.target);
     }
 }
 
