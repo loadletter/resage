@@ -4,7 +4,7 @@ from dbconf import *
 
 BOARD = "a"
 BUMPLIMIT = 500 #300 for jp
-UPDATEINTERVAL = 5
+UPDATEINTERVAL = 10
 DBMAXENTRIES = 3000
 
 CATALOG_URL = "http://a.4cdn.org/" + BOARD + "/catalog.json"
