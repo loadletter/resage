@@ -1,10 +1,11 @@
 // ==UserScript==
-// @name           4chan - Highlight all sage posts
+// @name           4chan - Highlight all sage posts v2
 // @namespace      resage (https://github.com/loadletter/resage)
 // @description    Finds saged posts and changes the email field from the default blue colour to red. This is useful as you can distinguish posts with sage. 
 // @include        http://*.4chan.org/*
 // @include        https://*.4chan.org/*
 // @grant          GM_xmlhttpRequest
+// @updateURL      https://github.com/loadletter/resage/raw/master/resage.user.js
 // ==/UserScript==
 
 /*
@@ -20,6 +21,7 @@ var board = spliturl[1];
 var thread = spliturl[2];
 var lastmodified = "";
 var sagelist = [];
+var cooldown = false;
 
 
 /*TODO:
@@ -66,7 +68,8 @@ function GetPostsFromAPI(e)
                 default:
                     console.log("Error %i", responseDetails.status);
 			}
-            
+            cooldown = true;
+            setTimeout(function() {cooldown = false;}, 3000);
             if(listmodified)
             {
                 Array.forEach(e.getElementsByClassName("postContainer replyContainer"), HighlightIfSage);
@@ -92,7 +95,7 @@ GetPostsFromAPI(document);
  
 function OnDOMNodeInserted(e)
 {
-    if(e.target.nodeName == "DIV")
+    if(e.target.nodeName == "DIV" && cooldown)
     {
         GetPostsFromAPI(e.target);
     }
