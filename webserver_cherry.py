@@ -11,6 +11,10 @@ except:
 	cherrypy.log("UNABLE TO CONNECT TO DATABASE, TERMINATING!", context='DATABASE', severity=logging.ERROR, traceback=False)
 	sys.exit(1)
 
+try:
+	from common import INDEX_MOTD
+except ImportError:
+	INDEX_MOTD = u"Hello World!"
 
 @contextmanager
 def getcursor():
@@ -58,7 +62,7 @@ class Api(object):
 			cherrypy.response.status = 304
 			return
 		
-		cherrypy.response.headers['Content-Type'] = 'application/json'
+		cherrypy.response.headers['Content-Type'] = 'application/json; charset=utf-8'
 		cherrypy.response.headers['Last-Modified'] = lastmod
 		
 		return str(data[0])
@@ -68,8 +72,8 @@ class Root(object):
 	api = Api()
 	@cherrypy.expose
 	def index(self):
-		cherrypy.response.headers['Content-Type'] = 'text/plain'
-		return "Hello World!"
+		cherrypy.response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+		return INDEX_MOTD.encode('utf-8')
 	
 	
 def main():
