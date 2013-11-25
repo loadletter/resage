@@ -63,53 +63,45 @@ def Checkb4Download(url,lastmod=''):
 		logging.debug("Downloaded: %s",url)
 		return {'lastmodified' : lastmodified, 'data' : data}
 	
-def UpdateCatalog(catalog_list):
-	while True:
-		if len(catalog_list) > 1:
-			raw_data = Checkb4Download(CATALOG_URL, time_unix2http(catalog_list[0]['mod']))
+def UpdateCatalog(catalog_lists, board, err_time_bonus):
+	catalog_list = catalog_lists[board]
+	if len(catalog_list) > 1:
+		raw_data = Checkb4Download(CATALOG_URL % board, time_unix2http(catalog_list[0]['mod']))
+	else:
+		raw_data = Checkb4Download(CATALOG_URL % board)
+	
+	if raw_data['data'] == '':
+		if 'error' in raw_data:
+			logging.error("Couln't update catalog for /%s/", board)
 		else:
-			raw_data = Checkb4Download(CATALOG_URL)
-		
-		if raw_data['data'] == '':
-			if 'error' in raw_data:
-				logging.error("Couln't update catalog")
-			else:
-				logging.debug("Catalog not modified")
-			time.sleep(UPDATEINTERVAL * 2)
-			continue
-		
+			logging.debug("Catalog not modified for /%s/", board)
+		return err_time_bonus
+	
+	try:
 		catalog = json.loads(raw_data['data'])
-		catalog_threads = []
-		for i in range(0, 10): #10 pages
-			thread_index = catalog[i][u'threads']
-			assert catalog[i][u'page'] == i
-			for single_thread in thread_index:
-				catalog_threads.append(single_thread)
+	except (ValueError, TypeError):
+		logging.error("JSON Error parsing %s", CATALOG_URL % board)
+		return err_time_bonus * 2
 		
-		catalog_list.appendleft({'d' : catalog_threads, 'mod' : time_http2unix(raw_data['lastmodified'])})
-		while len(catalog_list) > 5: #older catalogs to keep in memory
-			catalog_list.pop()
-		
-		logging.debug("Updated catalog: %i threads (%i catalogs)", len(catalog_threads), len(catalog_list))
-		break
+	catalog_threads = []
+	for i in range(0, 10): #10 pages
+		thread_index = catalog[i][u'threads']
+		assert catalog[i][u'page'] == i
+		for single_thread in thread_index:
+			catalog_threads.append(single_thread)
+	
+	catalog_list.appendleft({'d' : catalog_threads, 'mod' : time_http2unix(raw_data['lastmodified'])})
+	while len(catalog_list) > 5: #older catalogs to keep in memory
+		catalog_list.pop()
+	
+	logging.debug("Updated /%s/ catalog: %i threads (%i catalogs)", board, len(catalog_threads), len(catalog_list))
+	return 0
 
 
-def postcount(x):
-	count = 0
-	for t in x['d']:
-		count += t['replies']
-	return count	
-
-def AvgPostCount(catalog_list):
-	if len(catalog_list) < 1:
-		return 0
-	count_list = map(postcount, catalog_list)
-	count_sum = reduce(lambda x, y: x + y, count_list)
-	return count_sum / len(count_list)
-
-def GetSagedPosts(catalog_list, page=0):
-	current_catalog = catalog_list[page]['d']
-	cat_last_modified = catalog_list[page]['mod']
+def GetSagedPosts(catalog_lists, board):
+	catalog_list = catalog_lists[board]
+	current_catalog = catalog_list[0]['d']
+	cat_last_modified = catalog_list[0]['mod']
 	modtime_list = []
 	for cat_index, t in enumerate(current_catalog):
 		if t['replies'] > 0:
@@ -129,7 +121,7 @@ def GetSagedPosts(catalog_list, page=0):
 	for lst_i in range(1, len(modtime_list)):
 		curth = modtime_list[lst_i]
 		preth = modtime_list[lst_i - 1]
-		if curth[0] > preth[0] and curth[2] < BUMPLIMIT and curth[1] != preth[1]:
+		if curth[0] > preth[0] and curth[2] < BOARDS[board][0] and curth[1] != preth[1]:
 			logging.debug("%s %i - %i %s" % (repr(curth), lst_i, lst_i - 1, repr(preth)))
 			#TODO: code below is mostly useless
 			if curth[2] > 0:
@@ -177,25 +169,42 @@ def main():
 	with getcursor(conn, "CREATE TABLE") as initcurs:
 		initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[], lastmod INTEGER, board VARCHAR(5))")
 	
-	catalog_list = Deque()
+	catalog_lists = {}
+	for brd in BOARDS.iterkeys():
+		catalog_lists[brd] = Deque()
+	
+	refresh_timer = {}
+	for tmr in BOARDS.iterkeys():
+		refresh_timer[tmr] = 0
 		
 	for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]:
 		signal.signal(sig, sig_handler)
 	
-	while APPRUNNING:
-		time.sleep(UPDATEINTERVAL)
-		UpdateCatalog(catalog_list)
-		#print AvgPostCount(catalog_list)
-		data = GetSagedPosts(catalog_list)
-		
-		with getcursor(conn, "UPSERT") as cur:
-			cur.executemany(DB_EXEC_UPSERT, data)
-		
-		with getcursor(conn, "DATABASE CLEANUP") as cur:
-			cur.execute("DELETE FROM sage WHERE threadno IN (SELECT threadno FROM sage ORDER BY lastmod DESC OFFSET (%s))", (DBMAXENTRIES,))
+	logging.warning("Worker starting...")
 	
-	logging.info("Avg Postcount: %i" % AvgPostCount(catalog_list))
-	conn.close()
+	while APPRUNNING:
+		time.sleep(5)
+		for board in BOARDS.iterkeys():
+			if refresh_timer[board] < BOARDS[board][1]:
+				refresh_timer[board] += 5
+				break
+
+			if not APPRUNNING:
+				break
+			
+			newtime = UpdateCatalog(catalog_lists, board, -BOARDS[board][1])
+			data = GetSagedPosts(catalog_lists, board)
+			
+			with getcursor(conn, "UPSERT") as cur:
+				cur.executemany(DB_EXEC_UPSERT, data)
+			
+			with getcursor(conn, "DATABASE CLEANUP") as cur:
+				cur.execute("DELETE FROM sage WHERE threadno IN (SELECT threadno FROM sage WHERE board = (%s) ORDER BY lastmod DESC OFFSET (%s))", (board, BOARDS[board][2]))
+			
+			refresh_timer[board] = newtime
+	
+	conn.closeall()
+	logging.warning("Stopped")
 
 
 if __name__ == '__main__':
