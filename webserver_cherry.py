@@ -2,7 +2,7 @@ import cherrypy
 import os, sys, logging, signal, time
 import psycopg2, psycopg2.pool
 from dbconf import *
-from worker import BOARD
+from common import *
 from contextlib import contextmanager
 
 try:
@@ -37,14 +37,14 @@ class Api(object):
 			cherrypy.response.status = 400
 			return ""
 		
-		if board != BOARD:
+		if board not in BOARDS:
 			cherrypy.response.status = 404
 			return ""
 		
 		for i in range(0, 4):
 			try:
 				with getcursor() as cur:
-					cur.execute('SELECT array_to_json(sagedlist), lastmod FROM sage WHERE threadno = (%s) LIMIT 1', (thread, ))
+					cur.execute('SELECT array_to_json(sagedlist), lastmod FROM sage WHERE threadno = (%s) AND board = (%s) LIMIT 1', (thread, board))
 					data = cur.fetchone()
 			except psycopg2.InterfaceError:
 				if i == 3:

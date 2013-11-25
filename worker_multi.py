@@ -1,8 +1,12 @@
-import urllib2, json, logging, time, calendar, psycopg2, sys, signal
+import urllib2, json, logging, time, calendar, sys, signal
+import psycopg2, psycopg2.pool
 from collections import deque as Deque
+from contextlib import contextmanager
 from dbconf import *
+from common import *
 
-BOARDS =[{"a" : (500, 10, 3000), "jp" : (300, 15, 3000)}]
+#BOARDS = {"a" : (500, 10, 3000), "jp" : (300, 15, 3000)}
+#{board : (bumplimit, refresh_interval, db_maxentries)}
 
 CATALOG_URL = "http://a.4cdn.org/%s/catalog.json"
 LOGLEVEL = logging.DEBUG
@@ -10,9 +14,9 @@ LOGFILE = ''
 USERAGENT = "Mozilla/5.0 (sagebot)"
 APPRUNNING = True
 
-DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist, lastmod) AS (
+DB_EXEC_UPSERT = """WITH new_values (threadno, sagedlist, lastmod, board) AS (
   values 
-     (%s, %s, %s)
+     (%s, %s, %s, %s)
 
 ),
 upsert AS
@@ -21,15 +25,15 @@ upsert AS
         SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(s.sagedlist, nv.sagedlist)) ORDER BY 1),
             lastmod = nv.lastmod
     FROM new_values nv
-    WHERE s.threadno = nv.threadno
+    WHERE s.threadno = nv.threadno AND s.board = nv.board
     RETURNING s.*
 )
-INSERT INTO sage (threadno, sagedlist, lastmod)
-SELECT threadno, ARRAY[sagedlist], lastmod
+INSERT INTO sage (threadno, sagedlist, lastmod, board)
+SELECT threadno, ARRAY[sagedlist], lastmod, board
 FROM new_values
 WHERE NOT EXISTS (SELECT 1 
                   FROM upsert up
-                  WHERE up.threadno = new_values.threadno)
+                  WHERE up.threadno = new_values.threadno AND up.board = new_values.board)
 """
 #UPDATE test SET sagedlist = ARRAY(SELECT DISTINCT UNNEST(array_append(sagedlist, 148)) ORDER BY 1) WHERE threadno = 8015616;
 #adds a number to the postgre array, removing duplicates
@@ -37,10 +41,6 @@ WHERE NOT EXISTS (SELECT 1
 def time_http2unix(http_time_string):
 	time_tuple = time.strptime(http_time_string, '%a, %d %b %Y %H:%M:%S GMT')
 	return calendar.timegm(time_tuple)
-	
-def time_unix2http(unix_time_int):
-	time_tuple = time.gmtime(unix_time_int)
-	return time.strftime('%a, %d %b %Y %H:%M:%S GMT', time_tuple)
 
 def Checkb4Download(url,lastmod=''):
 	header = {'User-Agent': USERAGENT, }
@@ -54,16 +54,13 @@ def Checkb4Download(url,lastmod=''):
 		res.close()
 	except (urllib2.HTTPError, urllib2.URLError), e:
 		if e.code == 304 and lastmod != '':
-			logging.debug("CKDL - Not modified: %s",url)											
+			logging.debug("Not modified: %s",url)											
 			return {'lastmodified' : lastmod, 'data' : ''}	#not modified
-		elif e.code == 404:
-			logging.error("CKDL - 404 Error: %s",url)
-			return {'lastmodified' : lastmod, 'data' : '', 'error' : 404}
 		else:
-			logging.error("CKDL - %i %s: %s", e.code, e.msg, url)
+			logging.error("HTTP Error %i %s: %s", e.code, e.msg, url)
 			return {'lastmodified' : lastmod, 'data' : '', 'error' : e.code}
 	else:
-		logging.debug("CKDL - Downloaded: %s",url)
+		logging.debug("Downloaded: %s",url)
 		return {'lastmodified' : lastmodified, 'data' : data}
 	
 def UpdateCatalog(catalog_list):
@@ -158,17 +155,27 @@ def sig_handler(signum=None, frame=None):
 	logging.warning("Stopping")
 	sys.exit(0)
 
+@contextmanager
+def getcursor(conn_pool, query_text):
+	con = conn_pool.getconn()
+	try:
+		yield con.cursor()
+	except:
+		cherrypy.log("ERROR EXECUTING %s!" % query_text, context='DATABASE', severity=logging.ERROR, traceback=False)
+		con.rollback()
+	finally:
+		con.commit()
+		conn_pool.putconn(con)
+
 def main():
 	try:
-		conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, host=DB_HOST, password=DB_PASS)
+		conn = psycopg2.pool.SimpleConnectionPool(1, 2, dbname=DB_NAME, user=DB_USER, host=DB_HOST, password=DB_PASS)
 	except:
 		logging.error("UNABLE TO CONNECT TO DATABASE, TERMINATING!")
 		sys.exit(1)
 	
-	initcurs = conn.cursor()
-	initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[], lastmod INTEGER)")
-	conn.commit()
-	initcurs.close()
+	with getcursor(conn, "CREATE TABLE") as initcurs:
+		initcurs.execute("CREATE TABLE IF NOT EXISTS sage (threadno INTEGER PRIMARY KEY, sagedlist INTEGER[], lastmod INTEGER, board VARCHAR(5))")
 	
 	catalog_list = Deque()
 		
@@ -180,23 +187,12 @@ def main():
 		UpdateCatalog(catalog_list)
 		#print AvgPostCount(catalog_list)
 		data = GetSagedPosts(catalog_list)
-		cur = conn.cursor()
-		try:
+		
+		with getcursor(conn, "UPSERT") as cur:
 			cur.executemany(DB_EXEC_UPSERT, data)
-		except:
-			logging.error("ERROR EXECUTING UPSERT!")
-			conn.rollback()
-		else:
-			conn.commit()
-
-		try:
+		
+		with getcursor(conn, "DATABASE CLEANUP") as cur:
 			cur.execute("DELETE FROM sage WHERE threadno IN (SELECT threadno FROM sage ORDER BY lastmod DESC OFFSET (%s))", (DBMAXENTRIES,))
-		except:
-			logging.error("ERROR EXECUTING DATABASE CLEANUP!")
-			conn.rollback()
-		else:
-			conn.commit()
-		cur.close()
 	
 	logging.info("Avg Postcount: %i" % AvgPostCount(catalog_list))
 	conn.close()
