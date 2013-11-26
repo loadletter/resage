@@ -44,6 +44,8 @@ function GetPostsFromAPI(e)
         headers_tosend['If-Modified-Since'] = lastmodified;
     }
     
+    console.log("Tosend %s", JSON.stringify(headers_tosend));
+    
     GM_xmlhttpRequest({
         method: 'GET',
         url: serverurl + '/' + board + '/' + thread,
@@ -51,11 +53,13 @@ function GetPostsFromAPI(e)
         onload: function(responseDetails) {
             switch(responseDetails.status)
 			{
-				case 200:
-                    console.log("Got data");
-                    lastmodified = responseDetails.responseHeaders['Last-Modified'];
+				case 200: {
+                    console.log("Got data: %s", responseDetails.responseHeaders);
+                    lastmodified = responseDetails.responseHeaders.split(/(^|\n)Last-Modified: ([\w\d\s:,]+ GMT)/)[2];
                     sagelist = JSON.parse(responseDetails.responseText);
                     listmodified = true;
+                    console.log("Lastmod: %s", lastmodified);
+                }
                 break;
                 case 304:
                     console.log("Data not modified");
@@ -105,6 +109,7 @@ function OnDOMNodeInserted(e)
 
         } else {
             console.log("running from ondomnodeinserted");
+            console.log("Mod 2: %s", lastmodified);
             cooldown = true;
             setTimeout(function() {GetPostsFromAPI(); cooldown = false;}, 12000);
         }

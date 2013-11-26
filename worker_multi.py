@@ -51,13 +51,16 @@ def Checkb4Download(url, lastmod=''):
 		data = res.read()
 		lastmodified = res.headers.get('Last-Modified')
 		res.close()
-	except (urllib2.HTTPError, urllib2.URLError), e:
+	except urllib2.HTTPError, e:
 		if e.code == 304 and lastmod != '':
-			logging.debug("Not modified: %s",url)											
+			logging.debug("Not modified: %s", url)											
 			return {'lastmodified' : lastmod, 'data' : ''}	#not modified
 		else:
-			logging.error("HTTP Error %i %s: %s", e.code, e.msg, url)
+			logging.error("HTTPError %i %s: %s", e.code, e.msg, url)
 			return {'lastmodified' : lastmod, 'data' : '', 'error' : e.code}
+	except urllib2.URLError, e:
+		logging.error("URLError %s", e.reason)
+		return {'lastmodified' : lastmod, 'data' : '', 'error' : e.reason}
 	else:
 		logging.debug("Downloaded: %s",url)
 		return {'lastmodified' : lastmodified, 'data' : data}
