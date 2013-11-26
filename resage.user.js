@@ -22,13 +22,8 @@ var thread = spliturl[2];
 var lastmodified = "";
 var sagelist = [];
 var cooldown = false;
+var postqueue = [];
 
-
-/*TODO: make this javascript garbage work
- * eventlistener -->\
- *                   |--> getdatafromAPI --> if arrainclude(supportedboards, board) --> highlight from sagelist
- * pageload ------->/
- * */
  
 function ArrInclude(arr, obj)
 {
@@ -68,8 +63,17 @@ function GetPostsFromAPI(e)
                 default:
                     console.log("Error %i", responseDetails.status);
 			}
-            cooldown = true;
-            setTimeout(function() {cooldown = false;}, 3000);
+            
+            if(listmodified && e == undefined)
+            {
+                while((pst = postqueue.pop()) != undefined)
+                {
+                    console.log("runnnig from queue");
+                    Array.forEach(pst.getElementsByClassName("postInfo desktop"), HighlightIfSage);
+                }
+                return;
+            }
+            
             if(listmodified)
             {
                 Array.forEach(e.getElementsByClassName("postInfo desktop"), HighlightIfSage);
@@ -93,10 +97,17 @@ function HighlightIfSage(a)
  
 function OnDOMNodeInserted(e)
 {
-    if(e.target.nodeName == "DIV" && cooldown) //TODO:should be !cooldown
+    if(e.target.nodeName == "DIV" && e.target.getElementsByClassName("postInfo desktop").length > 0)
     {
-        GetPostsFromAPI(e.target);
-        console.log("running from onnodeinserted");
+        postqueue.push(e.target);   
+        if(cooldown) {
+            console.log("on cooldown");
+
+        } else {
+            console.log("running from ondomnodeinserted");
+            cooldown = true;
+            setTimeout(function() {GetPostsFromAPI(); cooldown = false;}, 12000);
+        }
     }
 }
 
