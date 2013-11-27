@@ -1,4 +1,4 @@
-import urllib2, json, logging, time, calendar, sys, signal
+import urllib2, json, logging, time, calendar, sys, signal, socket
 import psycopg2, psycopg2.pool
 from collections import deque as Deque
 from contextlib import contextmanager
@@ -61,6 +61,9 @@ def Checkb4Download(url, lastmod=''):
 	except urllib2.URLError, e:
 		logging.error("URLError %s", e.reason)
 		return {'lastmodified' : lastmod, 'data' : '', 'error' : e.reason}
+	except socket.error, e:
+		logging.error("socketError %s", e.errno)
+		return {'lastmodified' : lastmod, 'data' : '', 'error' : e.errno}
 	else:
 		logging.debug("Downloaded: %s",url)
 		return {'lastmodified' : lastmodified, 'data' : data}
