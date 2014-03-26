@@ -1,4 +1,5 @@
-import urllib2, json, logging, time, calendar, sys, signal, socket
+import httplib, json, logging, time, calendar, sys, signal, socket
+import requests
 import psycopg2, psycopg2.pool
 from collections import deque as Deque
 from contextlib import contextmanager
@@ -8,7 +9,7 @@ from dbconf import *
 #BOARDS = {board : (bumplimit, refresh_interval, db_maxentries)}
 
 CATALOG_URL = "http://a.4cdn.org/%s/catalog.json"
-LOGLEVEL = logging.DEBUG
+LOGLEVEL = logging.INFO
 LOGFILE = ''
 USERAGENT = "Mozilla/5.0 (sagebot)"
 APPRUNNING = True
@@ -41,39 +42,33 @@ def time_http2unix(http_time_string):
 	time_tuple = time.strptime(http_time_string, '%a, %d %b %Y %H:%M:%S GMT')
 	return calendar.timegm(time_tuple)
 
-def Checkb4Download(url, lastmod=''):
-	header = {'User-Agent': USERAGENT, }
-	req = urllib2.Request(url, None, header)
+def Checkb4Download(api_session, url, lastmod=''):
+	header = {}
 	if lastmod != '':
-		req.add_header('If-Modified-Since', lastmod)
-	try:
-		res = urllib2.urlopen(req)
-		data = res.read()
-		lastmodified = res.headers.get('Last-Modified')
-		res.close()
-	except urllib2.HTTPError, e:
-		if e.code == 304 and lastmod != '':
-			logging.debug("Not modified: %s", url)											
-			return {'lastmodified' : lastmod, 'data' : ''}	#not modified
-		else:
-			logging.error("HTTPError %i %s: %s", e.code, e.msg, url)
-			return {'lastmodified' : lastmod, 'data' : '', 'error' : e.code}
-	except urllib2.URLError, e:
-		logging.error("URLError %s", e.reason)
-		return {'lastmodified' : lastmod, 'data' : '', 'error' : e.reason}
-	except socket.error, e:
-		logging.error("socketError %s", e.errno)
-		return {'lastmodified' : lastmod, 'data' : '', 'error' : e.errno}
-	else:
-		logging.debug("Downloaded: %s",url)
+		header['If-Modified-Since'] = lastmod
+	
+	req = api_session.get(url, headers=header)
+	if req.status_code == 200:
+		data = req.text
+		lastmodified = req.headers['Last-Modified']
+		logging.debug("Downloaded: %s", url)
+		logging.debug("Content-Encoding: %s", req.headers['Content-Encoding'])
 		return {'lastmodified' : lastmodified, 'data' : data}
 	
-def UpdateCatalog(catalog_lists, board, err_time_bonus):
+	if req.status_code == 304:
+		logging.debug("Not modified: %s", url)
+		return {'lastmodified' : lastmod, 'data' : ''}
+	
+	logging.error("Request error: [%i] %s", req.status_code, url)
+	return {'lastmodified' : lastmod, 'data' : '', 'error' : req.status_code}
+
+	
+def UpdateCatalog(api_session, catalog_lists, board, err_time_bonus):
 	catalog_list = catalog_lists[board]
 	if len(catalog_list) > 1:
-		raw_data = Checkb4Download(CATALOG_URL % board, time_unix2http(catalog_list[0]['mod']))
+		raw_data = Checkb4Download(api_session, CATALOG_URL % board, time_unix2http(catalog_list[0]['mod']))
 	else:
-		raw_data = Checkb4Download(CATALOG_URL % board)
+		raw_data = Checkb4Download(api_session, CATALOG_URL % board)
 	
 	if raw_data['data'] == '':
 		if 'error' in raw_data:
@@ -187,6 +182,9 @@ def main():
 	
 	logging.warning("Worker starting...")
 	
+	api_session = requests.Session()
+	api_session.headers.update({'User-Agent': USERAGENT})
+	
 	while APPRUNNING:
 		time.sleep(2)
 		for board in BOARDS.iterkeys():
@@ -197,7 +195,7 @@ def main():
 			if not APPRUNNING:
 				break
 			
-			newtime = UpdateCatalog(catalog_lists, board, -BOARDS[board][1])
+			newtime = UpdateCatalog(api_session, catalog_lists, board, -BOARDS[board][1])
 			data = GetSagedPosts(catalog_lists, board)
 			
 			logging.debug("Data processed for /%s/", board)
