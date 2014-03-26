@@ -52,7 +52,6 @@ def Checkb4Download(api_session, url, lastmod=''):
 		data = req.text
 		lastmodified = req.headers['Last-Modified']
 		logging.debug("Downloaded: %s", url)
-		logging.debug("Content-Encoding: %s", req.headers['Content-Encoding'])
 		return {'lastmodified' : lastmodified, 'data' : data}
 	
 	if req.status_code == 304:
