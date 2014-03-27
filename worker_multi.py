@@ -116,7 +116,7 @@ def GetSagedPosts(catalog_lists, board):
 	#print "--------------"
 	#for xd in modtime_list: print repr(xd)
 	
-	sagedlist = [] #list of (threadno, postno, last_modified)
+	sagedlist = [] #list of (threadno, postno, last_modified, board)
 	for lst_i in range(1, len(modtime_list)):
 		curth = modtime_list[lst_i]
 		preth = modtime_list[lst_i - 1]
