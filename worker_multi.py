@@ -83,9 +83,9 @@ def UpdateCatalog(api_session, catalog_lists, board, err_time_bonus):
 		return err_time_bonus * 2
 		
 	catalog_threads = []
-	for i in range(0, 10): #10 pages
+	for i in range(1, 10): #9 pages
 		thread_index = catalog[i][u'threads']
-		assert catalog[i][u'page'] == i
+		assert catalog[i][u'page'] == i + 1
 		for single_thread in thread_index:
 			catalog_threads.append(single_thread)
 	
